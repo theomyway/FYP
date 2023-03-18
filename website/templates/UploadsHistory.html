@@ -1,0 +1,106 @@
+<html>
+<head>
+    <title>Upload Image</title>
+    <link rel="stylesheet" href="{{url_for('static',filename='css/bootstrap.min.css')}}">
+    <link rel="stylesheet" href="{{url_for('static',filename='myfont/css/all.min.css')}}">
+    <script src="{{url_for('static',filename='js/jquery.min.js')}}"></script>
+    <style>
+        #myimg {
+            height: 250px;
+            width: 235px;
+            box-shadow: 5px 5px 15px 3px black;
+            margin-bottom: 20px;
+        }
+
+        .del {
+            margin-bottom: 50px;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-gap: 20px;
+        }
+
+        .grid-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .note {
+            margin-top: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+<div class="col-md-offset-3 col-md-5" style="margin-top:50px">
+    <h3 class="page-header text-primary text-center"><span class="fa fa-image"> Upload Image (SQLite Database)</span>
+    </h3>
+    <form action="/" method="POST" enctype="multipart/form-data">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category,message in messages %}
+        <div class="alert alert-{{category}}">{{message}}</div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        <div class="form-group">
+            <label>Browse Image</label>
+            <input type="file" class="form-control" name="upload_image">
+        </div>
+        <div class="form-group">
+            <input type="submit" class="btn btn-primary btn-block">
+        </div>
+    </form>
+</div>
+<div class="row">
+    <div class="col-md-offset-3 col-md-5">
+        {% for img in data %}
+            <div class="col-md-4">
+                <div style="width: 300px;">
+                    <img src="{{ url_for('static', filename='uploads/' + img['img']) }}" alt="{{ img['img'] }}" width="300" height="300">
+                    <div class="note">
+                        <form method="POST">
+                            <textarea name="note" id="note" class="form-control"></textarea>
+                            <br />
+                            <div align="center">
+                                <button type="submit" class="btn btn-primary">Add Note</button>
+                            </div>
+                        </form>
+                        <ul class="list-group list-group-flush" id="notes">
+                            {% for note in user.notes %}
+                            <li class="list-group-item">
+                                {{ note.data }}
+                                <button type="button" class="close" onClick="deleteNote({{ note.id }})">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    <a href="{{url_for('views.delete_image',id=img['id'])}}" class="btn btn-danger btn-block del" style="width: 300px;">Delete</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% block javascript %}
+    <script type="text/javascript">
+ function deleteNote(noteId) {
+  fetch("/delete-note", {
+    method: "POST",
+    body: JSON.stringify({ noteId: noteId }),
+  }).then((_res) => {
+    location.href = location.pathname + "?_=" + new Date().getTime();
+  });
+}
+
+</script>
+{% endblock %}
+</body>
+</html>
+
