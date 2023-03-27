@@ -9,6 +9,8 @@ from tensorflow.keras.models import load_model
 import numpy as np
 import cv2
 import os
+import io
+import base64
 from builtins import str
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import svm
@@ -269,7 +271,7 @@ def uploaded_chest():
 
     # Splitting dataset in 20&test and training
     (trainF, testF, trainFL, testFL) = train_test_split(features, labels, test_size=0.20, random_state=10)
-
+#----------------------------------------------------RFC Initials
     imagePaths = list(paths.list_images("Images-processed"))
     rand = random.choices(imagePaths, k=4)
     for (i, rand) in enumerate(rand):
@@ -294,14 +296,26 @@ def uploaded_chest():
     sc.fit(X_train)
     X_train = sc.transform(X_train)
     X_test = sc.transform(X_test)
+#----------------> Initializing Random Forest classifier
 
     rfc = RandomForestClassifier()
     rfc.fit(X_train, y_train)
 
-    train_time = time() - t0
+    #------------> Initializing KNN Classifier
+    knn = KNeighborsClassifier(n_neighbors=8)
+    knn.fit(X_train, y_train)
+    #---------------------------------------------
+
+
+
+
+
+
+
+
 
     # -------------Input img
-
+    train_time = time() - t0
     images = cv2.imread('./flask app/assets/images/upload_chest.jpg')
     histogram_imp = []
     hara_imp = []
@@ -331,6 +345,58 @@ def uploaded_chest():
         rfc_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
         rfc_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
+    print("Random Forest score:")
     print(rfc_chest_pred)
+#----------------------------------------------------------------------------
+    knn_pred = knn.predict_proba(X_pred)[0][0]
+    probability = knn_pred
+    print("KNN Prediction:")
+    if probability > 0.65:
+        knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
+    else:
+        knn_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
+    print("KNN score:")
+    print(knn_chest_pred)
+    pred = knn.predict(X_test)
+    cm = confusion_matrix(y_test, pred)
 
-    return render_template('results_chest.html', rfc_chest_pred=rfc_chest_pred)
+    # Plot the confusion matrix
+    fig, ax = plt.subplots(figsize=(8,8 ))
+    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'],
+           title='Confusion matrix',
+           ylabel='True label',
+           xlabel='Predicted label')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_yticklabels(), fontsize=18)
+    fmt = 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+
+    # Convert the plot to a PNG image
+    img = io.BytesIO()
+    fig.savefig(img, format='png')
+    img.seek(0)
+    plot_url = base64.b64encode(img.getvalue()).decode()
+
+
+
+
+
+
+
+
+
+
+    return render_template('results_chest.html',plot_url=plot_url, rfc_chest_pred=rfc_chest_pred,knn_chest_pred=knn_chest_pred)
+
