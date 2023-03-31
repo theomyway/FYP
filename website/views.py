@@ -11,6 +11,8 @@ import cv2
 import os
 import io
 import base64
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.svm import SVC
 from builtins import str
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import svm
@@ -302,9 +304,17 @@ def uploaded_chest():
     rfc.fit(X_train, y_train)
 
     #------------> Initializing KNN Classifier
-    knn = KNeighborsClassifier(n_neighbors=8)
+
+    knn = KNeighborsClassifier(n_neighbors=42)
     knn.fit(X_train, y_train)
-    #---------------------------------------------
+    #-------------> Initializing SVM model
+
+    svm_model = SVC(probability=False)
+    svm = CalibratedClassifierCV(svm_model, cv=5)
+    svm.fit(X_train, y_train)
+
+
+    #-------------------------------------
 
 
 
@@ -340,28 +350,20 @@ def uploaded_chest():
     rfc_pred = rfc.predict_proba(X_pred)[0][0]
 
     probability = rfc_pred
-    print("Random Forest Prediction:")
-    if probability > 0.65:
+    print("Random Forest Prediction Score:")
+    print(probability)
+    if probability > 0.5:
         rfc_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        rfc_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
+        rfc_chest_pred = str('%.2f' % (probability*100) + '% Non-COVID Patient')
     print("Random Forest score:")
     print(rfc_chest_pred)
-#----------------------------------------------------------------------------
-    knn_pred = knn.predict_proba(X_pred)[0][0]
-    probability = knn_pred
-    print("KNN Prediction:")
-    if probability > 0.65:
-        knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
-    else:
-        knn_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
-    print("KNN score:")
-    print(knn_chest_pred)
-    pred = knn.predict(X_test)
-    cm = confusion_matrix(y_test, pred)
 
+    # ---------------------------------Confusion Matric RFC
+    pred = rfc.predict(X_test)
+    cm = confusion_matrix(y_test, pred)
     # Plot the confusion matrix
-    fig, ax = plt.subplots(figsize=(8,8 ))
+    fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
     ax.set(xticks=np.arange(cm.shape[1]),
@@ -387,16 +389,99 @@ def uploaded_chest():
     img = io.BytesIO()
     fig.savefig(img, format='png')
     img.seek(0)
-    plot_url = base64.b64encode(img.getvalue()).decode()
+    plot_url_rfc = base64.b64encode(img.getvalue()).decode()
+#--------------------------------------------------------------------------------------------------
+
+    knn_pred = knn.predict_proba(X_pred)[0][0]
+    probability = knn_pred
+    print("KNN Prediction Score:")
+    print(knn_pred)
+    if probability > 0.5:
+        knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
+    else:
+        knn_chest_pred = str('%.2f' % (probability*100) + '% Non-COVID Patient')
+    print("KNN score:")
+    print(knn_chest_pred)
+
+    # -----------------------------------------------------Plotting confusion matrix for KNN--------------
+    pred = knn.predict(X_test)
+    cm = confusion_matrix(y_test, pred)
+    # Plot the confusion matrix
+    fig, ax = plt.subplots(figsize=(8,8))
+    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'],
+           title='Confusion matrix',
+           ylabel='True label',
+           xlabel='Predicted label')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_yticklabels(), fontsize=18)
+    fmt = 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+
+    # Convert the plot to a PNG image
+    img = io.BytesIO()
+    fig.savefig(img, format='png')
+    img.seek(0)
+    plot_url_knn = base64.b64encode(img.getvalue()).decode()
+    # --------------------------------------------------------------------------------------------------
+    svm_pred = svm.predict_proba(X_pred)[0][0]
+
+    probability = svm_pred
+    print("Random Forest Prediction Score:")
+    print(probability)
+    if probability > 0.5:
+        svm_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
+    else:
+        svm_chest_pred = str('%.2f' % (probability*100) + '% Non-COVID Patient')
+    print("SVM score:")
+    print(svm_chest_pred)
+#-------------------------------->Confusion Matric Of SVM Model
+    pred = svm.predict(X_test)
+    cm = confusion_matrix(y_test, pred)
+    # Plot the confusion matrix
+    fig, ax = plt.subplots(figsize=(8, 8))
+    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'],
+           title='Confusion matrix',
+           ylabel='True label',
+           xlabel='Predicted label')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_yticklabels(), fontsize=18)
+    fmt = 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+
+    # Convert the plot to a PNG image
+    img = io.BytesIO()
+    fig.savefig(img, format='png')
+    img.seek(0)
+    plot_url_svm = base64.b64encode(img.getvalue()).decode()
 
 
 
 
 
 
-
-
-
-
-    return render_template('results_chest.html',plot_url=plot_url, rfc_chest_pred=rfc_chest_pred,knn_chest_pred=knn_chest_pred)
+    return render_template('results_chest.html',plot_url_knn=plot_url_knn,plot_url_rfc=plot_url_rfc,plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred,knn_chest_pred=knn_chest_pred,svm_chest_pred=svm_chest_pred)
 
