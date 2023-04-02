@@ -47,13 +47,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, login_required, logout_user, current_user
 from flask import Blueprint, render_template, request, flash, jsonify
 from flask_login import login_required, current_user
+from flask import Flask, request, render_template, send_from_directory
 import sqlite3
+
 print('Libraries successfully imported')
 from flask_login import UserMixin
 from sqlalchemy.sql import func
-
-
-
 
 conn = sqlite3.connect('database.db')
 c = conn.cursor()
@@ -83,10 +82,10 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 views = Blueprint('views', __name__)
 
 
+
 @views.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
-
     con = sqlite3.connect("database.db")
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -95,9 +94,7 @@ def home():
     con.close()
     user_id = session.get('user_id')
 
-
     return render_template("index.html", user=current_user)
-
 
 
 @views.route('/index.html')
@@ -153,7 +150,6 @@ def history():
             db.session.commit()
             flash('Note added!', category='success')
 
-
     con = sqlite3.connect("database.db")
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -161,11 +157,12 @@ def history():
     cur.execute("SELECT * FROM Image WHERE user_id=?", (current_user.id,))
     data = cur.fetchall()
     con.close()
-    return render_template('UploadsHistory.html', data=data,user=current_user)
+    return render_template('UploadsHistory.html', data=data, user=current_user)
+
 
 @views.route('/delete-note', methods=['POST'])
 def delete_note():
-    note = json.loads(request.data) # this function expects a JSON from the INDEX.js file
+    note = json.loads(request.data)  # this function expects a JSON from the INDEX.js file
     noteId = note['noteId']
     note = Note.query.get(noteId)
     if note:
@@ -174,9 +171,9 @@ def delete_note():
             db.session.commit()
     flash('Note deleted!', category='success')
 
-
     return jsonify({})
-    return render_template('UploadsHistory.html', data=data,user=current_user)
+    return render_template('UploadsHistory.html', data=data, user=current_user)
+
 
 @views.route('/delete_image/<int:id>')
 @login_required
@@ -188,7 +185,6 @@ def delete_image(id):
     con.close()
     flash('Image deleted successfully')
     return redirect(url_for('views.history'))
-
 
 
 @views.route('/uploaded_chest', methods=['POST', 'GET'])
@@ -210,6 +206,8 @@ def uploaded_chest():
             filename = file.filename
             file.save(os.path.join(app.static_folder, 'uploads', filename))
 
+
+
             con = sqlite3.connect("database.db")
             cur = con.cursor()
             cur.execute("INSERT INTO Image (img, user_id) VALUES (?, ?)", (file.filename, current_user.id))
@@ -224,8 +222,6 @@ def uploaded_chest():
             con.close()
 
             flash('File uploaded successfully')
-
-
 
     # ---------------INPUT_IMAGE
 
@@ -273,7 +269,7 @@ def uploaded_chest():
 
     # Splitting dataset in 20&test and training
     (trainF, testF, trainFL, testFL) = train_test_split(features, labels, test_size=0.20, random_state=10)
-#----------------------------------------------------RFC Initials
+    # ----------------------------------------------------RFC Initials
     imagePaths = list(paths.list_images("Images-processed"))
     rand = random.choices(imagePaths, k=4)
     for (i, rand) in enumerate(rand):
@@ -298,31 +294,22 @@ def uploaded_chest():
     sc.fit(X_train)
     X_train = sc.transform(X_train)
     X_test = sc.transform(X_test)
-#----------------> Initializing Random Forest classifier
+    # ----------------> Initializing Random Forest classifier
 
     rfc = RandomForestClassifier()
     rfc.fit(X_train, y_train)
 
-    #------------> Initializing KNN Classifier
+    # ------------> Initializing KNN Classifier
 
     knn = KNeighborsClassifier(n_neighbors=42)
     knn.fit(X_train, y_train)
-    #-------------> Initializing SVM model
+    # -------------> Initializing SVM model
 
     svm_model = SVC(probability=False)
     svm = CalibratedClassifierCV(svm_model, cv=5)
     svm.fit(X_train, y_train)
 
-
-    #-------------------------------------
-
-
-
-
-
-
-
-
+    # -------------------------------------
 
     # -------------Input img
     train_time = time() - t0
@@ -355,7 +342,7 @@ def uploaded_chest():
     if probability > 0.5:
         rfc_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        rfc_chest_pred = str('%.2f' % (probability*100) + '% Non-COVID Patient')
+        rfc_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
     print("Random Forest score:")
     print(rfc_chest_pred)
 
@@ -390,7 +377,7 @@ def uploaded_chest():
     fig.savefig(img, format='png')
     img.seek(0)
     plot_url_rfc = base64.b64encode(img.getvalue()).decode()
-#--------------------------------------------------------------------------------------------------
+    # --------------------------------------------------------------------------------------------------
 
     knn_pred = knn.predict_proba(X_pred)[0][0]
     probability = knn_pred
@@ -399,7 +386,7 @@ def uploaded_chest():
     if probability > 0.5:
         knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        knn_chest_pred = str('%.2f' % (probability*100) + '% Non-COVID Patient')
+        knn_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
     print("KNN score:")
     print(knn_chest_pred)
 
@@ -407,7 +394,7 @@ def uploaded_chest():
     pred = knn.predict(X_test)
     cm = confusion_matrix(y_test, pred)
     # Plot the confusion matrix
-    fig, ax = plt.subplots(figsize=(8,8))
+    fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
     ax.set(xticks=np.arange(cm.shape[1]),
@@ -443,10 +430,10 @@ def uploaded_chest():
     if probability > 0.5:
         svm_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        svm_chest_pred = str('%.2f' % (probability*100) + '% Non-COVID Patient')
+        svm_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
     print("SVM score:")
     print(svm_chest_pred)
-#-------------------------------->Confusion Matric Of SVM Model
+    # -------------------------------->Confusion Matric Of SVM Model
     pred = svm.predict(X_test)
     cm = confusion_matrix(y_test, pred)
     # Plot the confusion matrix
@@ -478,10 +465,6 @@ def uploaded_chest():
     img.seek(0)
     plot_url_svm = base64.b64encode(img.getvalue()).decode()
 
-
-
-
-
-
-    return render_template('results_chest.html',plot_url_knn=plot_url_knn,plot_url_rfc=plot_url_rfc,plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred,knn_chest_pred=knn_chest_pred,svm_chest_pred=svm_chest_pred)
-
+    return render_template('results_chest.html', plot_url_knn=plot_url_knn, plot_url_rfc=plot_url_rfc,
+                           plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
+                           svm_chest_pred=svm_chest_pred,filename=filename)
