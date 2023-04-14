@@ -82,7 +82,6 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 views = Blueprint('views', __name__)
 
 
-
 @views.route('/', methods=['GET', 'POST'])
 @login_required
 def home():
@@ -189,6 +188,7 @@ def delete_image(id):
 
 @views.route('/uploaded_chest', methods=['POST', 'GET'])
 def uploaded_chest():
+
     if request.method == 'POST':
         file = request.files['file']
         # check if the post request has the file part
@@ -196,6 +196,8 @@ def uploaded_chest():
             flash('No file part')
             return redirect(request.url)
         file = request.files['file']
+        file_path = os.path.join(app.static_folder, 'uploads', file.filename)
+
 
         # if user does not select file, browser also
         # submit an empty part without filename
@@ -205,8 +207,6 @@ def uploaded_chest():
         if file.filename != '':
             filename = file.filename
             file.save(os.path.join(app.static_folder, 'uploads', filename))
-
-
 
             con = sqlite3.connect("database.db")
             cur = con.cursor()
@@ -225,11 +225,11 @@ def uploaded_chest():
 
     # ---------------INPUT_IMAGE
 
-    image = cv2.imread('./flask app/assets/images/upload_chest.jpg')  # read file
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color spacing
-    image = cv2.resize(image, (224, 224))  # Resizing
-    image = np.array(image) / 255  # Normalization (Pre-Processing technique#03)
-    np.expand_dims(image, axis=0)  # Adding batch dimention
+    image = cv2.imread(file_path)  # read file
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
+    image = cv2.resize(image, (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
+    image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
+    image = np.expand_dims(image, axis=0)
 
     # -----------------------------------------------------------------------------------------------------------------
 
@@ -313,7 +313,7 @@ def uploaded_chest():
 
     # -------------Input img
     train_time = time() - t0
-    images = cv2.imread('./flask app/assets/images/upload_chest.jpg')
+    images = cv2.imread(file_path)
     histogram_imp = []
     hara_imp = []
     tas_imp = []
@@ -467,4 +467,4 @@ def uploaded_chest():
 
     return render_template('results_chest.html', plot_url_knn=plot_url_knn, plot_url_rfc=plot_url_rfc,
                            plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
-                           svm_chest_pred=svm_chest_pred,filename=filename)
+                           svm_chest_pred=svm_chest_pred, filename=filename)
