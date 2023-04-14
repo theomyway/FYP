@@ -266,6 +266,7 @@ def uploaded_chest():
     # Loading np array to train data
     features = load('features.npy', allow_pickle=True)
     labels = load('labels.npy', allow_pickle=True)
+    inception_chest = load_model('inception.h5')
 
     # Splitting dataset in 20&test and training
     (trainF, testF, trainFL, testFL) = train_test_split(features, labels, test_size=0.20, random_state=10)
@@ -301,7 +302,7 @@ def uploaded_chest():
 
     # ------------> Initializing KNN Classifier
 
-    knn = KNeighborsClassifier(n_neighbors=42)
+    knn = KNeighborsClassifier(n_neighbors=3)
     knn.fit(X_train, y_train)
     # -------------> Initializing SVM model
 
@@ -330,22 +331,36 @@ def uploaded_chest():
 
     X_pred = features_imp
     X_pred = sc.transform(X_pred)
-    # ---------------------------------------------------------------------------------------
+    # ----------------------------------------> Inceptionv3 Predeiction-----------------------
+
+    inception_pred = inception_chest.predict(image)
+    probability = inception_pred[0]
+    print("Inception Predictions:")
+    if probability[0] > 0.5:
+        inception_chest_pred = str('%.2f' % (probability[0] * 100) + '% COVID')
+    else:
+        inception_chest_pred = str('%.2f' % ((1 - probability[0]) * 100) + '% Non-COVID Patient')
+    print(inception_chest_pred)
 
     # ----------------------------------------->Random-Forest PREDICTION--------------------------------
+    rfc_pred = rfc.predict_proba(X_pred)[0]
 
-    rfc_pred = rfc.predict_proba(X_pred)[0][0]
+    # Extract the probability of the positive class (COVID-19) from the predictions
+    probability = rfc_pred[0]
 
-    probability = rfc_pred
+    # Print the Random Forest Prediction Score
     print("Random Forest Prediction Score:")
     print(probability)
+
+    # Check if the predicted probability is greater than 0.5 to determine the predicted class
     if probability > 0.5:
         rfc_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        rfc_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
-    print("Random Forest score:")
-    print(rfc_chest_pred)
+        rfc_chest_pred = str('%.2f' % ((1 - probability) * 100) + '% Non-COVID Patient')
 
+    # Print the Random Forest Prediction
+    print("Random Forest Prediction:")
+    print(rfc_chest_pred)
     # ---------------------------------Confusion Matric RFC
     pred = rfc.predict(X_test)
     cm = confusion_matrix(y_test, pred)
@@ -379,14 +394,14 @@ def uploaded_chest():
     plot_url_rfc = base64.b64encode(img.getvalue()).decode()
     # --------------------------------------------------------------------------------------------------
 
-    knn_pred = knn.predict_proba(X_pred)[0][0]
-    probability = knn_pred
+    knn_pred = knn.predict_proba(X_pred)[0]
+    probability = knn_pred[0]
     print("KNN Prediction Score:")
     print(knn_pred)
     if probability > 0.5:
         knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        knn_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
+        knn_chest_pred = str('%.2f' % ((1-probability) * 100) + '% Non-COVID Patient')
     print("KNN score:")
     print(knn_chest_pred)
 
@@ -422,15 +437,15 @@ def uploaded_chest():
     img.seek(0)
     plot_url_knn = base64.b64encode(img.getvalue()).decode()
     # --------------------------------------------------------------------------------------------------
-    svm_pred = svm.predict_proba(X_pred)[0][0]
+    svm_pred = svm.predict_proba(X_pred)[0]
 
-    probability = svm_pred
+    probability = svm_pred[0]
     print("Random Forest Prediction Score:")
     print(probability)
     if probability > 0.5:
         svm_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        svm_chest_pred = str('%.2f' % (probability * 100) + '% Non-COVID Patient')
+        svm_chest_pred = str('%.2f' % ((1-probability) * 100) + '% Non-COVID Patient')
     print("SVM score:")
     print(svm_chest_pred)
     # -------------------------------->Confusion Matric Of SVM Model
@@ -465,6 +480,8 @@ def uploaded_chest():
     img.seek(0)
     plot_url_svm = base64.b64encode(img.getvalue()).decode()
 
+
+
     return render_template('results_chest.html', plot_url_knn=plot_url_knn, plot_url_rfc=plot_url_rfc,
                            plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
-                           svm_chest_pred=svm_chest_pred, filename=filename)
+                           svm_chest_pred=svm_chest_pred,inception_chest_pred=inception_chest_pred, filename=filename)
