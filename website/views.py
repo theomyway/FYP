@@ -9,7 +9,9 @@ from tensorflow.keras.models import load_model
 import numpy as np
 import cv2
 import os
+import seaborn as sns
 import io
+import matplotlib as mpl
 import base64
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.svm import SVC
@@ -29,6 +31,9 @@ import cv2
 import json
 import matplotlib.pyplot as plt
 import mahotas
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelBinarizer
+from tensorflow.keras.utils import to_categorical
 from IPython.display import Image
 from time import time
 from pylab import imshow, gray, show
@@ -190,6 +195,7 @@ def delete_image(id):
 def uploaded_chest():
 
     if request.method == 'POST':
+
         file = request.files['file']
         # check if the post request has the file part
         if 'file' not in request.files:
@@ -205,6 +211,7 @@ def uploaded_chest():
             flash('No selected file')
             return redirect(request.url)
         if file.filename != '':
+
             filename = file.filename
             file.save(os.path.join(app.static_folder, 'uploads', filename))
 
@@ -267,6 +274,7 @@ def uploaded_chest():
     features = load('features.npy', allow_pickle=True)
     labels = load('labels.npy', allow_pickle=True)
     inception_chest = load_model('inception.h5')
+    loaded_arrays = np.load('VGG19-Labels.npz')
 
     # Splitting dataset in 20&test and training
     (trainF, testF, trainFL, testFL) = train_test_split(features, labels, test_size=0.20, random_state=10)
@@ -337,10 +345,76 @@ def uploaded_chest():
     probability = inception_pred[0]
     print("Inception Predictions:")
     if probability[0] > 0.5:
-        inception_chest_pred = str('%.2f' % (probability[0] * 100) + '% COVID')
+        inception_chest_pred = str('%.2f' % (probability[0] * 100) + '% COVID Patient')
     else:
         inception_chest_pred = str('%.2f' % ((1 - probability[0]) * 100) + '% Non-COVID Patient')
     print(inception_chest_pred)
+    # ---------------------------------Confusion Matrix Inceptionv3 <-------------------
+    # Extract the arrays
+    covid_labels = loaded_arrays['covid_labels']
+    noncovid_labels = loaded_arrays['noncovid_labels']
+    covid_images = loaded_arrays['covid_images']
+    noncovid_images = loaded_arrays['noncovid_images']
+
+    # Convert to array and Normalize to interval of [0,1]
+    covid_images = np.array(covid_images) / 255
+    noncovid_images = np.array(noncovid_images) / 255
+
+
+    # split into training and testing
+    covid_x_train, covid_x_test, covid_y_train, covid_y_test = train_test_split(
+        covid_images, covid_labels, test_size=0.2)
+    noncovid_x_train, noncovid_x_test, noncovid_y_train, noncovid_y_test = train_test_split(
+        noncovid_images, noncovid_labels, test_size=0.2)
+
+    # concatenate the training and testing data
+
+    X_testCNN = np.concatenate((noncovid_x_test, covid_x_test), axis=0)
+    y_testCNN = np.concatenate((noncovid_y_test, covid_y_test), axis=0)
+
+    # reshape y_testCNN to create a column vector of labels
+    y_testCNN = np.reshape(y_testCNN, (-1, 1))
+
+    # make predictions on test set
+    y_pred = inception_chest.predict(X_testCNN)
+
+    # get labels for predictions
+    y_pred_labels = np.argmax(y_pred, axis=1)
+    y_test_labels = np.argmax(y_testCNN , axis=1)
+
+    # calculate confusion matrix
+    cm = confusion_matrix(y_test_labels, y_pred_labels)
+    # plot confusion matrix
+    fig, ax = plt.subplots(figsize=(8, 8))
+    im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+    ax.figure.colorbar(im, ax=ax)
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'],
+           title='Confusion matrix',
+           ylabel='True label',
+           xlabel='Predicted label')
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_yticklabels(), fontsize=18)
+    fmt = 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+
+    # Convert the plot to a PNG image
+    img = io.BytesIO()
+    plt.savefig(img, format='png')
+    img.seek(0)
+    plot_url_VGG19 = base64.b64encode(img.getvalue()).decode()
+
+
+    #----------------------------------------------------------
 
     # ----------------------------------------->Random-Forest PREDICTION--------------------------------
     rfc_pred = rfc.predict_proba(X_pred)[0]
@@ -389,15 +463,16 @@ def uploaded_chest():
 
     # Convert the plot to a PNG image
     img = io.BytesIO()
-    fig.savefig(img, format='png')
+    plt.savefig(img, format='png')
     img.seek(0)
     plot_url_rfc = base64.b64encode(img.getvalue()).decode()
+
     # --------------------------------------------------------------------------------------------------
 
     knn_pred = knn.predict_proba(X_pred)[0]
     probability = knn_pred[0]
     print("KNN Prediction Score:")
-    print(knn_pred)
+    print(probability)
     if probability > 0.5:
         knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
@@ -433,7 +508,7 @@ def uploaded_chest():
 
     # Convert the plot to a PNG image
     img = io.BytesIO()
-    fig.savefig(img, format='png')
+    plt.savefig(img, format='png')
     img.seek(0)
     plot_url_knn = base64.b64encode(img.getvalue()).decode()
     # --------------------------------------------------------------------------------------------------
@@ -476,7 +551,7 @@ def uploaded_chest():
 
     # Convert the plot to a PNG image
     img = io.BytesIO()
-    fig.savefig(img, format='png')
+    plt.savefig(img, format='png')
     img.seek(0)
     plot_url_svm = base64.b64encode(img.getvalue()).decode()
 
@@ -484,4 +559,4 @@ def uploaded_chest():
 
     return render_template('results_chest.html', plot_url_knn=plot_url_knn, plot_url_rfc=plot_url_rfc,
                            plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
-                           svm_chest_pred=svm_chest_pred,inception_chest_pred=inception_chest_pred, filename=filename)
+                           svm_chest_pred=svm_chest_pred,inception_chest_pred=inception_chest_pred,plot_url_VGG19=plot_url_VGG19,filename=filename)
