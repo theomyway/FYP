@@ -274,7 +274,12 @@ def uploaded_chest():
     features = load('features.npy', allow_pickle=True)
     labels = load('labels.npy', allow_pickle=True)
     inception_chest = load_model('inception.h5')
-    loaded_arrays = np.load('VGG19-Labels.npz')
+    covid_labels = np.load('covid_labels.npy')
+    noncovid_labels = np.load('noncovid_labels.npy')
+    covid_images = np.load('covid_images.npy')
+    noncovid_images = np.load('noncovid_images.npy')
+
+
 
     # Splitting dataset in 20&test and training
     (trainF, testF, trainFL, testFL) = train_test_split(features, labels, test_size=0.20, random_state=10)
@@ -350,11 +355,7 @@ def uploaded_chest():
         inception_chest_pred = str('%.2f' % ((1 - probability[0]) * 100) + '% Non-COVID Patient')
     print(inception_chest_pred)
     # ---------------------------------Confusion Matrix Inceptionv3 <-------------------
-    # Extract the arrays
-    covid_labels = loaded_arrays['covid_labels']
-    noncovid_labels = loaded_arrays['noncovid_labels']
-    covid_images = loaded_arrays['covid_images']
-    noncovid_images = loaded_arrays['noncovid_images']
+
 
     # Convert to array and Normalize to interval of [0,1]
     covid_images = np.array(covid_images) / 255
