@@ -32,21 +32,12 @@ import json
 import matplotlib.pyplot as plt
 import mahotas
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelBinarizer
-from tensorflow.keras.utils import to_categorical
-from IPython.display import Image
+
 from time import time
-from pylab import imshow, gray, show
-from flask import Flask, request, render_template, redirect, url_for, send_file
-from os import path
-from flask import Flask, request, render_template, url_for, g
+
 import random
 from numpy import asarray, loadtxt, load, save
-from numpy import savetxt
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from os import path
-from flask_login import LoginManager
+
 from flask import Blueprint, render_template, request, flash, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, login_required, logout_user, current_user
