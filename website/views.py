@@ -90,7 +90,7 @@ else:
 conn.commit()
 conn.close()
 
-ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
+ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
 # Create Database if it doesnt exist
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
@@ -201,28 +201,25 @@ def delete_image(id):
     cur.execute("DELETE FROM Image WHERE id=? AND user_id=?", (id, current_user.id))
     con.commit()
     con.close()
-    flash('Image deleted successfully')
+    flash('Image deleted successfully!',category='success')
     return redirect(url_for('views.history'))
 
 
-import imghdr
-
-
 def is_valid_xray_image(filename):
-    """
-    Check whether the given file is a valid X-ray image.
-    """
-
     # Load the image with OpenCV
     img = cv2.imread(filename)
 
+    # Check the file extension
+    if not allowed_file(filename):
+        return False
 
-
-
+    # Check that the image has a valid size
+    if img.shape[0] not in [256, 299, 1024] or img.shape[1] not in [256, 299, 1024]:
+        return False
 
     # Check that the image has low brightness
     brightness = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).mean()
-    if brightness > 135:
+    if brightness > 150:
         return False
 
     return True
@@ -240,10 +237,10 @@ def uploaded_chest():
         file = request.files['file']
         # check if the post request has the file part
         if 'file' not in request.files:
-            flash('No file part')
+            flash('No file part', 'error')
             return redirect(request.url)
         if not allowed_file(file.filename):
-            flash('Only JPG or PNG files are allowed')
+            flash('Only JPG or PNG files are allowed', category='error')
             return redirect(request.url)
 
         file_path = os.path.join(app.static_folder, 'uploads', file.filename)
@@ -251,50 +248,48 @@ def uploaded_chest():
         # if user does not select file, browser also
         # submit an empty part without filename
         if file.filename == '':
-            flash('No selected file')
+            flash('No selected file', category='error')
             return redirect(request.url)
         if file.filename != '':
             filename = file.filename
 
             file.save(os.path.join(app.static_folder, 'uploads', filename))
-            con = sqlite3.connect("database.db")
-            cur = con.cursor()
-            cur.execute("INSERT INTO Image (img, user_id) VALUES (?, ?)", (file.filename, current_user.id))
-            con.commit()
-            con.close()
-            con = sqlite3.connect("database.db")
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
 
-            cur.execute("SELECT * FROM Image WHERE user_id=?", (current_user.id,))
-            data = cur.fetchall()
-            con.close()
+            try:
+                # Check that the file is a valid X-ray image
+                if is_valid_xray_image(file_path):
 
-            flash('File uploaded successfully')
+                    con = sqlite3.connect("database.db")
+                    cur = con.cursor()
+                    cur.execute("INSERT INTO Image (img, user_id) VALUES (?, ?)", (file.filename, current_user.id))
+                    con.commit()
 
-    try:
-        # Check that the file is a valid X-ray image
-        if is_valid_xray_image(file_path):
-            # read file
+                    con.close()
+                    con = sqlite3.connect("database.db")
+                    con.row_factory = sqlite3.Row
+                    cur = con.cursor()
 
-            image = cv2.imread(file_path)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
-            image = cv2.resize(image, (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
-            image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
-            image = np.expand_dims(image, axis=0)
-        else:
-            # If the file is not a valid X-ray image, delete it and return an error message
-            file.close()
-            with open(file_path, 'wb') as f:
-                f.write(file.read())
-            print("The uploaded file is not a valid X-ray image. Please upload a valid X-ray image.")
-            return redirect(url_for('views.upload'))
+                    cur.execute("SELECT * FROM Image WHERE user_id=?", (current_user.id,))
+                    cur.fetchall()
+                    con.close()
 
-    except Exception as e:
-        # If an error occurs, delete the file and return an error message
-        file.close()
-        print("An error occurred while processing the uploaded file. Please try again later.")
-        return redirect(url_for('views.upload'))
+                    image = cv2.imread(file_path)
+                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
+                    image = cv2.resize(image,
+                                       (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
+                    image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
+                    image = np.expand_dims(image, axis=0)
+                else:
+                    # If the file is not a valid X-ray image, delete it and return an error message
+                    file.close()
+                    flash('Please upload a valid X-ray image!', category='error')
+                    return redirect(url_for('views.upload'))
+
+            except Exception as e:
+                # If an error occurs, delete the file and return an error message
+                file.close()
+                flash('Error in processing the image!', category='error')
+                return redirect(url_for('views.upload'))
 
     # -----------------------------------------------------------------------------------------------------------------
 
@@ -610,7 +605,12 @@ def uploaded_chest():
     img.seek(0)
     plot_url_svm = base64.b64encode(img.getvalue()).decode()
 
+    flash('Image uploaded successfully!', category='success')
+
     return render_template('results_chest.html', plot_url_knn=plot_url_knn, plot_url_rfc=plot_url_rfc,
                            plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
                            svm_chest_pred=svm_chest_pred, inception_chest_pred=inception_chest_pred,
                            plot_url_VGG19=plot_url_VGG19, filename=filename)
+
+
+

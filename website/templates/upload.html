@@ -43,6 +43,22 @@
     display: inline-block;
     cursor: pointer;
 }
+
+.alert-success {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.alert-error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+
+
+
     </style>
 
     
@@ -127,6 +143,19 @@
                 </ul><!-- /.thm-breadcrumb -->
             </div><!-- /.container -->
         </section><!-- /.page-header -->
+       <div class="col-md-5" style="margin-top:0px; padding-left: 0;">
+            <form action="/" method="POST" enctype="multipart/form-data">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category,message in messages %}
+                            <div class="alert alert-{{category}}">{{message}}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+            </form>
+        </div>
 
         <section class="prevention-one prevention-one__prevention-page">
             <div class="container">
@@ -350,3 +379,8 @@
 </body>
 
 </html>
+<script>
+    $(document).ready(function(){
+        $(".alert").hide(5000);
+    });
+</script>

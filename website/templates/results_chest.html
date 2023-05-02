@@ -34,6 +34,31 @@
     <link rel="stylesheet" href="static/css/responsive.css">
 
 
+  <style type="text/css">
+        input[type="file"]{
+    display: none;
+}
+.custom-file-upload {
+    border: 1px solid #ccc;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.alert-success {
+
+
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+.alert-error {
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
+}
+
+
+    </style>
 
 
 
@@ -110,11 +135,30 @@
                 <ul class="thm-breadcrumb list-unstyled">
                     <li><a href="#">Home</a></li>
                     <li><span>Results</span></li>
+
                 </ul><!-- /.thm-breadcrumb -->
+
             </div><!-- /.container -->
+
         </section><!-- /.page-header -->
+        <div class="col-md-5" style="margin-top:0px; padding-left: 0;">
+            <form action="/" method="POST" enctype="multipart/form-data">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category,message in messages %}
+                            <div class="alert alert-{{category}}">{{message}}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+            </form>
+        </div>
+
+
 
         <section class="about-three">
+
             <div class="container">
                 <div class="block-title text-center">
                     <h3 style="font-size: 70px; margin-top: -60px;">Input Image</h3>
@@ -422,3 +466,8 @@
 </body>
 
 </html>
+<script>
+    $(document).ready(function(){
+        $(".alert").hide(5000);
+    });
+</script>
