@@ -1,5 +1,14 @@
+import urllib
+
+from PIL import Image
 from flask import Blueprint, render_template, request, flash, jsonify
 from flask_login import login_required, current_user
+from keras.applications import InceptionV3
+from keras.applications.convnext import preprocess_input, decode_predictions
+from keras.preprocessing import image as krs_image
+from tensorboard import data
+from urllib3.util import current_time
+
 from .models import Note
 from . import db
 from werkzeug.utils import secure_filename
@@ -7,8 +16,10 @@ import json
 from flask import Flask, render_template, request, session, redirect, url_for, flash
 from tensorflow.keras.models import load_model
 import numpy as np
+from flask import current_app
 import cv2
 import os
+import datetime
 import seaborn as sns
 import io
 import matplotlib as mpl
@@ -28,7 +39,11 @@ from sklearn.neural_network import MLPClassifier
 from imutils import paths
 import numpy as np
 import cv2
+import time
 import json
+
+import cache
+
 import matplotlib.pyplot as plt
 import mahotas
 from sklearn.model_selection import train_test_split
@@ -45,6 +60,12 @@ from flask import Blueprint, render_template, request, flash, jsonify
 from flask_login import login_required, current_user
 from flask import Flask, request, render_template, send_from_directory
 import sqlite3
+from flask_cache_external_assets import CacheExternalAssets
+from flask import Flask
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
 
 print('Libraries successfully imported')
 from flask_login import UserMixin
@@ -73,8 +94,11 @@ ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg', 'gif'])
 # Create Database if it doesnt exist
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
+# -----------------------------------------------------------------
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
 views = Blueprint('views', __name__)
 
 
@@ -166,7 +190,6 @@ def delete_note():
             db.session.commit()
     flash('Note deleted!', category='success')
 
-    return jsonify({})
     return render_template('UploadsHistory.html', data=data, user=current_user)
 
 
@@ -182,9 +205,36 @@ def delete_image(id):
     return redirect(url_for('views.history'))
 
 
+import imghdr
+
+
+def is_valid_xray_image(filename):
+    """
+    Check whether the given file is a valid X-ray image.
+    """
+
+    # Load the image with OpenCV
+    img = cv2.imread(filename)
+
+
+
+
+
+    # Check that the image has low brightness
+    brightness = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).mean()
+    if brightness > 135:
+        return False
+
+    return True
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 @views.route('/uploaded_chest', methods=['POST', 'GET'])
 def uploaded_chest():
-
+    global image, file_path, filename, file
     if request.method == 'POST':
 
         file = request.files['file']
@@ -192,9 +242,11 @@ def uploaded_chest():
         if 'file' not in request.files:
             flash('No file part')
             return redirect(request.url)
-        file = request.files['file']
-        file_path = os.path.join(app.static_folder, 'uploads', file.filename)
+        if not allowed_file(file.filename):
+            flash('Only JPG or PNG files are allowed')
+            return redirect(request.url)
 
+        file_path = os.path.join(app.static_folder, 'uploads', file.filename)
 
         # if user does not select file, browser also
         # submit an empty part without filename
@@ -202,10 +254,9 @@ def uploaded_chest():
             flash('No selected file')
             return redirect(request.url)
         if file.filename != '':
-
             filename = file.filename
-            file.save(os.path.join(app.static_folder, 'uploads', filename))
 
+            file.save(os.path.join(app.static_folder, 'uploads', filename))
             con = sqlite3.connect("database.db")
             cur = con.cursor()
             cur.execute("INSERT INTO Image (img, user_id) VALUES (?, ?)", (file.filename, current_user.id))
@@ -221,13 +272,29 @@ def uploaded_chest():
 
             flash('File uploaded successfully')
 
-    # ---------------INPUT_IMAGE
+    try:
+        # Check that the file is a valid X-ray image
+        if is_valid_xray_image(file_path):
+            # read file
 
-    image = cv2.imread(file_path)  # read file
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
-    image = cv2.resize(image, (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
-    image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
-    image = np.expand_dims(image, axis=0)
+            image = cv2.imread(file_path)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
+            image = cv2.resize(image, (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
+            image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
+            image = np.expand_dims(image, axis=0)
+        else:
+            # If the file is not a valid X-ray image, delete it and return an error message
+            file.close()
+            with open(file_path, 'wb') as f:
+                f.write(file.read())
+            print("The uploaded file is not a valid X-ray image. Please upload a valid X-ray image.")
+            return redirect(url_for('views.upload'))
+
+    except Exception as e:
+        # If an error occurs, delete the file and return an error message
+        file.close()
+        print("An error occurred while processing the uploaded file. Please try again later.")
+        return redirect(url_for('views.upload'))
 
     # -----------------------------------------------------------------------------------------------------------------
 
@@ -269,8 +336,6 @@ def uploaded_chest():
     noncovid_labels = np.load('noncovid_labels.npy')
     covid_images = np.load('covid_images.npy')
     noncovid_images = np.load('noncovid_images.npy')
-
-
 
     # Splitting dataset in 20&test and training
     (trainF, testF, trainFL, testFL) = train_test_split(features, labels, test_size=0.20, random_state=10)
@@ -318,10 +383,11 @@ def uploaded_chest():
 
     # -------------Input img
     train_time = time() - t0
-    images = cv2.imread(file_path)
+
     histogram_imp = []
     hara_imp = []
     tas_imp = []
+    images = cv2.imread(file_path)
 
     histogram_imp.append(extract_color_histogram(images))
     tas_imp.append(fd_tas(images))
@@ -347,11 +413,9 @@ def uploaded_chest():
     print(inception_chest_pred)
     # ---------------------------------Confusion Matrix Inceptionv3 <-------------------
 
-
     # Convert to array and Normalize to interval of [0,1]
     covid_images = np.array(covid_images) / 255
     noncovid_images = np.array(noncovid_images) / 255
-
 
     # split into training and testing
     covid_x_train, covid_x_test, covid_y_train, covid_y_test = train_test_split(
@@ -372,7 +436,7 @@ def uploaded_chest():
 
     # get labels for predictions
     y_pred_labels = np.argmax(y_pred, axis=1)
-    y_test_labels = np.argmax(y_testCNN , axis=1)
+    y_test_labels = np.argmax(y_testCNN, axis=1)
 
     # calculate confusion matrix
     cm = confusion_matrix(y_test_labels, y_pred_labels)
@@ -405,8 +469,7 @@ def uploaded_chest():
     img.seek(0)
     plot_url_VGG19 = base64.b64encode(img.getvalue()).decode()
 
-
-    #----------------------------------------------------------
+    # ----------------------------------------------------------
 
     # ----------------------------------------->Random-Forest PREDICTION--------------------------------
     rfc_pred = rfc.predict_proba(X_pred)[0]
@@ -468,7 +531,7 @@ def uploaded_chest():
     if probability > 0.5:
         knn_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        knn_chest_pred = str('%.2f' % ((1-probability) * 100) + '% Non-COVID Patient')
+        knn_chest_pred = str('%.2f' % ((1 - probability) * 100) + '% Non-COVID Patient')
     print("KNN score:")
     print(knn_chest_pred)
 
@@ -512,7 +575,7 @@ def uploaded_chest():
     if probability > 0.5:
         svm_chest_pred = str('%.2f' % (probability * 100) + '% COVID Patient')
     else:
-        svm_chest_pred = str('%.2f' % ((1-probability) * 100) + '% Non-COVID Patient')
+        svm_chest_pred = str('%.2f' % ((1 - probability) * 100) + '% Non-COVID Patient')
     print("SVM score:")
     print(svm_chest_pred)
     # -------------------------------->Confusion Matric Of SVM Model
@@ -547,8 +610,7 @@ def uploaded_chest():
     img.seek(0)
     plot_url_svm = base64.b64encode(img.getvalue()).decode()
 
-
-
     return render_template('results_chest.html', plot_url_knn=plot_url_knn, plot_url_rfc=plot_url_rfc,
                            plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
-                           svm_chest_pred=svm_chest_pred,inception_chest_pred=inception_chest_pred,plot_url_VGG19=plot_url_VGG19,filename=filename)
+                           svm_chest_pred=svm_chest_pred, inception_chest_pred=inception_chest_pred,
+                           plot_url_VGG19=plot_url_VGG19, filename=filename)
