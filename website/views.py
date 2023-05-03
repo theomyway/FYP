@@ -1,3 +1,4 @@
+import re
 import urllib
 
 from PIL import Image
@@ -201,7 +202,7 @@ def delete_image(id):
     cur.execute("DELETE FROM Image WHERE id=? AND user_id=?", (id, current_user.id))
     con.commit()
     con.close()
-    flash('Image deleted successfully!',category='success')
+    flash('Image deleted successfully!', category='success')
     return redirect(url_for('views.history'))
 
 
@@ -209,17 +210,22 @@ def is_valid_xray_image(filename):
     # Load the image with OpenCV
     img = cv2.imread(filename)
 
+    # Check for the JFIF header using a regular expression
+
     # Check the file extension
     if not allowed_file(filename):
         return False
 
-    # Check that the image has a valid size
-    if img.shape[0] not in [256, 299, 1024] or img.shape[1] not in [256, 299, 1024]:
-        return False
+    with open(filename, 'rb') as f:
+        if re.search(b'\xff\xd8\xff\xe0\x00\x10JFIF', f.read()) is not None:
+            return False
 
     # Check that the image has low brightness
     brightness = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).mean()
     if brightness > 150:
+        return False
+        # Check that the image has a valid size
+    if img.shape[0] not in [256, 299, 1024] or img.shape[1] not in [256, 299, 1024]:
         return False
 
     return True
@@ -239,57 +245,53 @@ def uploaded_chest():
         if 'file' not in request.files:
             flash('No file part', 'error')
             return redirect(request.url)
-        if not allowed_file(file.filename):
-            flash('Only JPG or PNG files are allowed', category='error')
-            return redirect(request.url)
 
+    if file.filename == '':
+        flash('No selected file', category='error')
+        return redirect(request.url)
+    if file.filename != '':
+        filename = file.filename
         file_path = os.path.join(app.static_folder, 'uploads', file.filename)
+        file.save(os.path.join(app.static_folder, 'uploads', filename))
 
-        # if user does not select file, browser also
-        # submit an empty part without filename
-        if file.filename == '':
-            flash('No selected file', category='error')
-            return redirect(request.url)
-        if file.filename != '':
-            filename = file.filename
+    try:
+        # Check that the file is a valid X-ray image
+        if is_valid_xray_image(file_path):
 
-            file.save(os.path.join(app.static_folder, 'uploads', filename))
+            con = sqlite3.connect("database.db")
+            cur = con.cursor()
+            cur.execute("INSERT INTO Image (img, user_id) VALUES (?, ?)", (file.filename, current_user.id))
+            con.commit()
 
-            try:
-                # Check that the file is a valid X-ray image
-                if is_valid_xray_image(file_path):
+            con.close()
+            con = sqlite3.connect("database.db")
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
 
-                    con = sqlite3.connect("database.db")
-                    cur = con.cursor()
-                    cur.execute("INSERT INTO Image (img, user_id) VALUES (?, ?)", (file.filename, current_user.id))
-                    con.commit()
+            cur.execute("SELECT * FROM Image WHERE user_id=?", (current_user.id,))
+            cur.fetchall()
+            con.close()
 
-                    con.close()
-                    con = sqlite3.connect("database.db")
-                    con.row_factory = sqlite3.Row
-                    cur = con.cursor()
+            image = cv2.imread(file_path)
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
+            image = cv2.resize(image,
+                               (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
+            image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
+            image = np.expand_dims(image, axis=0)
 
-                    cur.execute("SELECT * FROM Image WHERE user_id=?", (current_user.id,))
-                    cur.fetchall()
-                    con.close()
+        else:
+            # If the file is not a valid X-ray image, delete it and return an error message
 
-                    image = cv2.imread(file_path)
-                    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Color change to RGB  (Pre-Processing technique#01)
-                    image = cv2.resize(image,
-                                       (224, 224))  # Resizing image according to algo (Pre-Processing technique#02)
-                    image = np.array(image) / 255  # Converting image into a numpy array (Pre-Processing technique#03)
-                    image = np.expand_dims(image, axis=0)
-                else:
-                    # If the file is not a valid X-ray image, delete it and return an error message
-                    file.close()
-                    flash('Please upload a valid X-ray image!', category='error')
-                    return redirect(url_for('views.upload'))
+            file.close()
+            flash('Please upload a valid X-ray image!', category='error')
+            return redirect(url_for('views.upload'))
 
-            except Exception as e:
-                # If an error occurs, delete the file and return an error message
-                file.close()
-                flash('Error in processing the image!', category='error')
-                return redirect(url_for('views.upload'))
+    except Exception as e:
+        # If an error occurs, delete the file and return an error message
+
+        file.close()
+        flash('Error in processing the image!', category='error')
+        return redirect(url_for('views.upload'))
 
     # -----------------------------------------------------------------------------------------------------------------
 
@@ -382,6 +384,7 @@ def uploaded_chest():
     histogram_imp = []
     hara_imp = []
     tas_imp = []
+
     images = cv2.imread(file_path)
 
     histogram_imp.append(extract_color_histogram(images))
@@ -413,10 +416,11 @@ def uploaded_chest():
     noncovid_images = np.array(noncovid_images) / 255
 
     # split into training and testing
-    covid_x_train, covid_x_test, covid_y_train, covid_y_test = train_test_split(
-        covid_images, covid_labels, test_size=0.2)
-    noncovid_x_train, noncovid_x_test, noncovid_y_train, noncovid_y_test = train_test_split(
-        noncovid_images, noncovid_labels, test_size=0.2)
+    covid_x_train, covid_x_test, covid_y_train, covid_y_test = train_test_split(covid_images, covid_labels,
+                                                                                test_size=0.2)
+    noncovid_x_train, noncovid_x_test, noncovid_y_train, noncovid_y_test = train_test_split(noncovid_images,
+                                                                                            noncovid_labels,
+                                                                                            test_size=0.2)
 
     # concatenate the training and testing data
 
@@ -439,22 +443,16 @@ def uploaded_chest():
     fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           xticklabels=['NON_COVID', 'COVID-19'],
-           yticklabels=['NON_COVID', 'COVID-19'],
-           title='Confusion matrix',
-           ylabel='True label',
+    ax.set(xticks=np.arange(cm.shape[1]), yticks=np.arange(cm.shape[0]), xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'], title='Confusion matrix', ylabel='True label',
            xlabel='Predicted label')
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor", fontsize=18)
     plt.setp(ax.get_yticklabels(), fontsize=18)
     fmt = 'd'
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
-                    ha="center", va="center",
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22, ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
 
@@ -492,22 +490,16 @@ def uploaded_chest():
     fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           xticklabels=['NON_COVID', 'COVID-19'],
-           yticklabels=['NON_COVID', 'COVID-19'],
-           title='Confusion matrix',
-           ylabel='True label',
+    ax.set(xticks=np.arange(cm.shape[1]), yticks=np.arange(cm.shape[0]), xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'], title='Confusion matrix', ylabel='True label',
            xlabel='Predicted label')
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor", fontsize=18)
     plt.setp(ax.get_yticklabels(), fontsize=18)
     fmt = 'd'
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
-                    ha="center", va="center",
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22, ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
 
@@ -537,22 +529,16 @@ def uploaded_chest():
     fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           xticklabels=['NON_COVID', 'COVID-19'],
-           yticklabels=['NON_COVID', 'COVID-19'],
-           title='Confusion matrix',
-           ylabel='True label',
+    ax.set(xticks=np.arange(cm.shape[1]), yticks=np.arange(cm.shape[0]), xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'], title='Confusion matrix', ylabel='True label',
            xlabel='Predicted label')
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor", fontsize=18)
     plt.setp(ax.get_yticklabels(), fontsize=18)
     fmt = 'd'
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
-                    ha="center", va="center",
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22, ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
 
@@ -580,22 +566,16 @@ def uploaded_chest():
     fig, ax = plt.subplots(figsize=(8, 8))
     im = ax.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
     ax.figure.colorbar(im, ax=ax)
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           xticklabels=['NON_COVID', 'COVID-19'],
-           yticklabels=['NON_COVID', 'COVID-19'],
-           title='Confusion matrix',
-           ylabel='True label',
+    ax.set(xticks=np.arange(cm.shape[1]), yticks=np.arange(cm.shape[0]), xticklabels=['NON_COVID', 'COVID-19'],
+           yticklabels=['NON_COVID', 'COVID-19'], title='Confusion matrix', ylabel='True label',
            xlabel='Predicted label')
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor", fontsize=18)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor", fontsize=18)
     plt.setp(ax.get_yticklabels(), fontsize=18)
     fmt = 'd'
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22,
-                    ha="center", va="center",
+            ax.text(j, i, format(cm[i, j], 'd'), fontsize=22, ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
 
@@ -611,6 +591,3 @@ def uploaded_chest():
                            plot_url_svm=plot_url_svm, rfc_chest_pred=rfc_chest_pred, knn_chest_pred=knn_chest_pred,
                            svm_chest_pred=svm_chest_pred, inception_chest_pred=inception_chest_pred,
                            plot_url_VGG19=plot_url_VGG19, filename=filename)
-
-
-
