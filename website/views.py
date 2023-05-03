@@ -210,23 +210,21 @@ def is_valid_xray_image(filename):
     # Load the image with OpenCV
     img = cv2.imread(filename)
 
-    # Check for the JFIF header using a regular expression
-
     # Check the file extension
     if not allowed_file(filename):
         return False
 
-    with open(filename, 'rb') as f:
-        if re.search(b'\xff\xd8\xff\xe0\x00\x10JFIF', f.read()) is not None:
-            return False
-
     # Check that the image has low brightness
     brightness = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).mean()
-    if brightness > 150:
+    if brightness > 200:
         return False
         # Check that the image has a valid size
     if img.shape[0] not in [256, 299, 1024] or img.shape[1] not in [256, 299, 1024]:
         return False
+
+    # with open(filename, 'rb') as f:
+    # if re.search(b'\xff\xd8\xff\xe0\x00\x10JFIF', f.read()) is not None:
+    # return False
 
     return True
 
