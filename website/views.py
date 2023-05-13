@@ -366,7 +366,7 @@ def uploaded_chest():
 
     # ------------> Initializing KNN Classifier
 
-    knn = KNeighborsClassifier(n_neighbors=3)
+    knn = KNeighborsClassifier(n_neighbors=32)
     knn.fit(X_train, y_train)
     # -------------> Initializing SVM model
 
