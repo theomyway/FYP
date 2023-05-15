@@ -1,50 +1,24 @@
-import re
-import urllib
 
-from PIL import Image
-from flask import Blueprint, render_template, request, flash, jsonify
-from flask_login import login_required, current_user
-from keras.applications import InceptionV3
-from keras.applications.convnext import preprocess_input, decode_predictions
-from keras.preprocessing import image as krs_image
 from tensorboard import data
-from urllib3.util import current_time
-
 from .models import Note
 from . import db
-from werkzeug.utils import secure_filename
-import json
-from flask import Flask, render_template, request, session, redirect, url_for, flash
+from flask import session
 from tensorflow.keras.models import load_model
-import numpy as np
-from flask import current_app
-import cv2
 import os
-import datetime
-import seaborn as sns
 import io
-import matplotlib as mpl
 import base64
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.svm import SVC
 from builtins import str
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn import svm
-from sklearn.ensemble import VotingClassifier, RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, plot_confusion_matrix
-from sklearn.metrics import plot_precision_recall_curve, average_precision_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.utils.extmath import density
-from sklearn.neural_network import MLPClassifier
 from imutils import paths
 import numpy as np
 import cv2
 import time
 import json
-
-import cache
-
 import matplotlib.pyplot as plt
 import mahotas
 from sklearn.model_selection import train_test_split
@@ -52,25 +26,18 @@ from sklearn.model_selection import train_test_split
 from time import time
 
 import random
-from numpy import asarray, loadtxt, load, save
+from numpy import load
 
-from flask import Blueprint, render_template, request, flash, redirect, url_for
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import login_user, login_required, logout_user, current_user
-from flask import Blueprint, render_template, request, flash, jsonify
+from flask import redirect, url_for
+from flask import Blueprint,flash
 from flask_login import login_required, current_user
-from flask import Flask, request, render_template, send_from_directory
+from flask import request, render_template
 import sqlite3
-from flask_cache_external_assets import CacheExternalAssets
+
 from flask import Flask
-import torch
-import torch.nn as nn
-import torchvision.models as models
-import torchvision.transforms as transforms
 
 print('Libraries successfully imported')
-from flask_login import UserMixin
-from sqlalchemy.sql import func
+
 
 conn = sqlite3.connect('database.db')
 c = conn.cursor()
