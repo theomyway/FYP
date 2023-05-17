@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ## Running The App
 
 ```bash
-python wsgi.py
+python main.py
 ```
 
 ## Viewing The App
