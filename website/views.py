@@ -373,7 +373,8 @@ def uploaded_chest():
         inception_chest_pred = str('%.2f' % (probability[0] * 100) + '% COVID Patient')
     else:
         inception_chest_pred = str('%.2f' % ((1 - probability[0]) * 100) + '% Non-COVID Patient')
-    print(inception_chest_pred)
+    print(probability[0])
+
     # ---------------------------------Confusion Matrix Inceptionv3 <-------------------
 
     # Convert to array and Normalize to interval of [0,1]
