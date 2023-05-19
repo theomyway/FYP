@@ -16,9 +16,6 @@ def create_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
 
-    # Set the LD_LIBRARY_PATH environment variable
-    lib_path = os.path.abspath("lib")
-    os.environ['LD_LIBRARY_PATH'] = lib_path
 
     from .views import views
     from .auth import auth
