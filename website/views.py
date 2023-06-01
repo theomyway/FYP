@@ -1,10 +1,13 @@
-
 from tensorboard import data
 from .models import Note
 from . import db
 from flask import session
-from tensorflow.keras.models import load_model
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 import os
+from tensorflow.keras.models import load_model
 import io
 import base64
 from sklearn.calibration import CalibratedClassifierCV
@@ -22,22 +25,17 @@ import json
 import matplotlib.pyplot as plt
 import mahotas
 from sklearn.model_selection import train_test_split
-
 from time import time
-
 import random
 from numpy import load
-
 from flask import redirect, url_for
-from flask import Blueprint,flash
+from flask import Blueprint, flash
 from flask_login import login_required, current_user
 from flask import request, render_template
 import sqlite3
-
 from flask import Flask
 
 print('Libraries successfully imported')
-
 
 conn = sqlite3.connect('database.db')
 c = conn.cursor()
@@ -198,6 +196,9 @@ def is_valid_xray_image(filename):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+
 
 
 @views.route('/uploaded_chest', methods=['POST', 'GET'])
